@@ -12,7 +12,7 @@ const navLinks = [
   { name: "Company", href: "#about" },
   { name: "Services", href: "#services" },
   { name: "Industry", href: "#industries" },
-  { name: "Blog", href: "#insights" },
+  { name: "Blog", href: "/blog" },
 ];
 
 export default function Navbar() {
@@ -59,7 +59,7 @@ export default function Navbar() {
             </Link>
           ))}
           <Link
-            href="#contact"
+            href="/contact-us"
             className="px-10 py-4 rounded-full bg-black/5 border border-black/5 text-foreground text-sm font-bold shadow-lg shadow-black/5 hover:bg-black/10 transition-all hover:scale-105"
           >
             <span>Let's Connect</span>
@@ -96,7 +96,7 @@ export default function Navbar() {
                 </Link>
               ))}
               <Link
-                href="#contact"
+                href="/contact-us"
                 className="w-full text-center py-3 bg-primary text-white rounded-xl font-bold"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
