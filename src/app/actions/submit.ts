@@ -1,0 +1,81 @@
+'use server';
+
+import { Resolver } from 'node:dns/promises';
+// @ts-ignore
+import freeEmailDomains from 'free-email-domains';
+// @ts-ignore
+import disposableDomains from 'disposable-email-domains';
+import { saveToExcel } from '@/lib/saveToExcel';
+import { checkIfExists } from '@/lib/preventSpam';
+
+// Instantiate the resolver outside the function to reuse it across requests
+const resolver = new Resolver();
+// Use reliable public DNS servers to avoid ETIMEOUT in serverless environments
+resolver.setServers(['1.1.1.1', '8.8.8.8']);
+
+export async function validateContactForm(prevState: any, formData: FormData) {
+  const email = formData.get('email') as string;
+  const phone = formData.get('phone') as string || '';
+
+  if (!email || !email.includes('@')) {
+    return { valid: false, error: "A valid email is required.", successMessage: "" };
+  }
+
+  const alreadyExists = await checkIfExists(email, phone);
+  if (alreadyExists) {
+    return { 
+      valid: false, 
+      error: "You have already submitted a request with this email or phone number.", 
+      successMessage: "" 
+    };
+  }
+
+  const domain = email.split('@')[1].toLowerCase();
+
+  // 1. Block standard free/spam domains (Local check)
+  if (freeEmailDomains.includes(domain) || disposableDomains.includes(domain)) {
+    return { 
+      valid: false, 
+      error: "Please use a work email rather than public providers (like Gmail/Yahoo).", 
+      successMessage: "" 
+    };
+  }
+
+  try {
+    // 2. Check if the domain actually has Mail Servers (Network check)
+    // We add a racing timeout promise to ensure the action doesn't hang forever
+    const mxRecords = await Promise.race([
+      resolver.resolveMx(domain),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 4000))
+    ]) as any[];
+
+    if (!mxRecords || mxRecords.length === 0) {
+      return { valid: false, error: "This domain cannot receive emails.", successMessage: "" };
+    }
+
+    // Process form... (DB logic, Email sending, etc.)
+    await saveToExcel(email, formData);
+    return { valid: true, error: "", successMessage: "Thank you! Your project request has been submitted successfully." };
+
+  } catch (e: any) {
+    console.error(`DNS MX Lookup Error for ${domain}:`, e.code || e.message);
+
+    // If the domain strictly does not exist (ENOTFOUND) 
+    // or has no DNS records at all (ENODATA)
+    if (e.code === 'ENOTFOUND' || e.code === 'ENODATA') {
+      return { valid: false, error: "The domain provided does not exist.", successMessage: "" };
+    }
+
+    /** * FAIL-SAFE: 
+     * For ETIMEOUT, ESERVFAIL, or our custom 'TIMEOUT' error, 
+     * we let the form pass. It's better to receive one spam email 
+     * than to block a real client because a DNS server was slow.
+     */
+    await saveToExcel(email, formData);
+    return { 
+      valid: true, 
+      error: "", 
+      successMessage: "Your project request has been submitted successfully. Thank You!" 
+    };
+  }
+}

@@ -1,0 +1,72 @@
+Quality control in high-throughput manufacturing has historically been a human problem: trained inspectors studying parts on a belt, trying to catch defects with eyes that tire, minds that drift, and judgment that varies. We set out to replace that with something better — and ended up achieving >99% defect detection accuracy at production speed.
+
+| Metric | Value |
+| :--- | :--- |
+| **Detection Accuracy** | >99% |
+| **Processing Speed** | 120fps |
+| **Min Defect Size** | 0.1mm |
+| **Latency Per Frame** | <40ms |
+
+---
+
+## Why Traditional QC Breaks at Scale
+
+Manual inspection misses an average of 15-30% of defects under standard production conditions. Fatigue sets in after two hours. Lighting inconsistency between shifts changes what inspectors see. And crucially — you cannot parallelise a human inspector across 50 camera stations without 50 salaries.
+
+* Human eye misses ~20% of defects at sustained throughput
+* Inconsistent lighting interpretation between shifts
+* Cannot process faster than ~3 parts/second manually
+* No persistent audit trail for rejected parts
+* Scaling requires linear headcount increases
+
+---
+
+## The Architecture: Three Layers of Intelligence
+
+### Layer 1 — Edge Inference
+
+Cameras running at 120fps feed into NVIDIA Jetson AGX Orin modules co-located on the production line. A lightweight TensorRT-optimised model runs inference at the edge, flagging anomalies in under 40ms. Anything flagged gets pulled from the line immediately — no cloud round-trip required.
+
+### Layer 2 — Cloud Ensemble Validation
+
+Flagged frames stream to a multi-cloud ensemble across Google Cloud (Vertex AI), Azure ML, and AWS SageMaker. Three independent models vote on each defect. This cross-cloud approach eliminates single-provider availability risk and lets us run different model architectures optimised on each platform.
+
+> “The multi-cloud ensemble was the breakthrough moment. A single model at 97% accuracy means 3 false negatives per 100. Three independent models voting cuts that to effectively zero in our operating conditions.”
+> — **Lead ML Engineer, AnoCloud**
+
+### Layer 3 — Continuous Retraining Loop
+
+Every confirmed defect — whether caught by the system or discovered post-shipment — gets labelled and fed back into training within 48 hours. The model improves continuously without manual intervention. Six months after deployment, our false negative rate had dropped by a further 60% from the baseline.
+
+**⚡ Key Insight:** Edge inference keeps latency below the mechanical rejection window. Cloud ensemble catches edge cases the local model misses. The combination is what gets you past 99%.
+
+---
+
+## Deployment & Results
+
+| Metric | Before | After |
+| :--- | :--- | :--- |
+| Defect escape rate | 18-30% | <1% |
+| Inspection throughput | 3 parts/s | 12 parts/s |
+| Inspection cost/unit | $0.40 | $0.06 |
+| Customer returns (90 days) | 2.1% | 0.2% |
+
+---
+
+## What It Takes to Deploy This
+
+1. 3-4 weeks: Discovery, camera placement, lighting study
+2. 5-6 weeks: Initial model training on your defect taxonomy
+3. 2 weeks: Edge hardware deployment and latency validation
+4. 1 week: Shadow mode (parallel with human QC)
+5. Ongoing: Continuous retraining and model drift monitoring
+
+---
+
+## Key Takeaways
+
+* Edge + cloud is the right split — not either/or
+* Multi-cloud ensemble is the accuracy unlock, not a single powerful model
+* Continuous retraining makes the system better than day-one deployment
+* Shadow mode before full rollout is non-negotiable for stakeholder trust
+* ROI typically closes within 8 months via reject rate reduction alone

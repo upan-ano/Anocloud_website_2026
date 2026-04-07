@@ -1,0 +1,196 @@
+.container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  perspective: 1000px;
+}
+
+.circle {
+  position: absolute;
+  border-radius: 50%;
+  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1.5px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+/* Layered Gradients & Sizes */
+.circle5 {
+  width: 100%;
+  height: 100%;
+  border-color: rgba(34, 197, 94, 0.4);
+  box-shadow: inset 0 0 40px rgba(34, 197, 94, 0.1), 0 0 20px rgba(34, 197, 94, 0.1);
+  background: radial-gradient(circle, transparent 70%, rgba(34, 197, 94, 0.05) 100%);
+  z-index: 5;
+}
+
+.circle4 {
+  width: 85%;
+  height: 85%;
+  border-color: rgba(34, 197, 94, 0.6);
+  box-shadow: inset 0 0 30px rgba(34, 197, 94, 0.1);
+  z-index: 4;
+}
+
+.circle3 {
+  width: 70%;
+  height: 70%;
+  border-color: rgba(34, 197, 94, 0.8);
+  border-style: dashed;
+  z-index: 3;
+}
+
+.circle2 {
+  width: 55%;
+  height: 55%;
+  border-color: #22c55e;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+  z-index: 2;
+}
+
+.circle1 {
+  width: 40%;
+  height: 40%;
+  background: radial-gradient(circle, #065f46 0%, #064e3b 100%);
+  border-color: #10b981;
+  box-shadow: 0 0 25px rgba(16, 185, 129, 0.4);
+  z-index: 1;
+  overflow: visible; /* Ensure label doesn't get clipped */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.innerLabel {
+  text-align: center;
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  font-weight: 800;
+  color: #E2FCE9;
+  text-transform: uppercase;
+  line-height: 1.4;
+  opacity: 0.95;
+  text-shadow: 
+    0 0 10px rgba(226, 252, 233, 0.8),
+    0 0 20px rgba(16, 185, 129, 0.4);
+  transition: all 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.container:hover .innerLabel {
+  opacity: 0;
+  transform: scale(0.8) translateY(-10px);
+}
+
+/* Robot Styling */
+.robotWrapper {
+  position: absolute;
+  width: 75%;
+  height: 75%;
+  bottom: 10%;
+  left: 50%;
+  transform: translateX(-50%) translateY(40%) scale(0.6);
+  opacity: 0;
+  z-index: 10; /* Sticks out over the circles */
+  transition: all 2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.robotWrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 15px rgba(16, 185, 129, 0.3)) contrast(1.05) brightness(1.05);
+  display: block;
+}
+
+/* Hover & Active Effects */
+.container:hover .circle5,
+.container.active .circle5 {
+  transform: rotate(180deg) scale(1.05);
+  border-color: rgba(16, 185, 129, 0.8);
+  box-shadow: 0 0 40px rgba(16, 185, 129, 0.3);
+}
+
+.container:hover .circle4,
+.container.active .circle4 {
+  transform: rotate(-180deg) scale(1.1);
+  border-color: #10b981;
+}
+
+.container:hover .circle3,
+.container.active .circle3 {
+  transform: rotate(270deg) scale(1.15);
+  border-color: #34d399;
+}
+
+.container:hover .circle2,
+.container.active .circle2 {
+  transform: rotate(-270deg) scale(1.2);
+  box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+}
+
+.container:hover .circle1,
+.container.active .circle1 {
+  transform: scale(1.3);
+  box-shadow: 0 0 50px rgba(16, 185, 129, 0.8);
+}
+
+.container:hover .robotWrapper {
+  transform: translateX(-50%) translateY(-15%) scale(1.1);
+  opacity: 1;
+}
+
+/* Mobile Responsiveness */
+@media (max-width: 1023px) {
+  .container {
+    max-width: 320px;
+    margin: 0 auto;
+  }
+  
+  .innerLabel {
+    font-size: 0.55rem;
+  }
+
+  /* Adjust emergence for mobile to be less extreme */
+  .container:hover .robotWrapper,
+  .container.active .robotWrapper {
+    transform: translateX(-50%) translateY(-10%) scale(1);
+    opacity: 1;
+  }
+}
+
+/* Decorative Scanlines for High Tech Look */
+.circle1::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(16, 185, 129, 0.2) 3px
+  );
+  pointer-events: none;
+}
+
+/* Pulsing effect for the inner core */
+@keyframes corePulse {
+  0% { opacity: 0.8; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.8; transform: scale(1); }
+}
+
+.circle1 {
+  animation: corePulse 3s infinite ease-in-out;
+}
