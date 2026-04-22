@@ -2,13 +2,14 @@
 
 import { useActionState, useEffect, useState, useRef } from 'react';
 import { validateContactForm } from '@/app/actions/submit';
-import { CheckCircle, X } from 'lucide-react';
+import { CheckCircle, X, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const initialState = {
   valid: false,
   error: '',
   successMessage: '',
+  emailFailed: false,
   timestamp: 0,
 };
 
@@ -18,15 +19,15 @@ export default function ContactForm() {
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
-    if (state?.successMessage && state?.timestamp) {
+    if ((state?.successMessage || state?.emailFailed) && state?.timestamp) {
       setShowToast(true);
-      if (state.valid) {
+      if (state.valid && !state.emailFailed) {
         formRef.current?.reset();
       }
       const timer = setTimeout(() => setShowToast(false), 5000);
       return () => clearTimeout(timer);
     }
-  }, [state?.successMessage, state?.timestamp, state?.valid]);
+  }, [state?.successMessage, state?.emailFailed, state?.timestamp, state?.valid]);
 
   return (
     <div className="w-full max-w-6xl mx-auto px-6 py-16">
@@ -191,12 +192,30 @@ export default function ContactForm() {
               initial={{ opacity: 0, x: 40, scale: 0.95 }}
               animate={{ opacity: 1, x: 0, scale: 1 }}
               exit={{ opacity: 0, x: 20, scale: 0.95 }}
-              className="pointer-events-auto relative overflow-hidden bg-gradient-to-r from-indigo-600 to-purple-600 text-white px-5 py-4 rounded-xl shadow-[0_10px_40px_rgba(79,70,229,0.4)] flex items-start gap-4 border border-white/20 backdrop-blur-md w-full max-w-sm"
+              className={`pointer-events-auto relative overflow-hidden text-white px-5 py-4 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.2)] flex items-start gap-4 border border-white/20 backdrop-blur-md w-full max-w-sm ${
+                state.emailFailed 
+                  ? "bg-gradient-to-r from-red-600 to-rose-600 shadow-red-500/20" 
+                  : "bg-gradient-to-r from-indigo-600 to-purple-600 shadow-indigo-500/20"
+              }`}
             >
-              <CheckCircle className="w-5 h-5 text-purple-200 mt-0.5 shrink-0" strokeWidth={2.5} />
+              {state.emailFailed ? (
+                <AlertCircle className="w-5 h-5 text-red-100 mt-0.5 shrink-0" strokeWidth={2.5} />
+              ) : (
+                <CheckCircle className="w-5 h-5 text-purple-200 mt-0.5 shrink-0" strokeWidth={2.5} />
+              )}
+              
               <div className="flex-1 pr-6 relative top-[-1px]">
-                <h4 className="font-bold text-[15px] tracking-wide">SUCCESS</h4>
-                <p className="text-[14px] text-purple-100 mt-0.5 font-medium opacity-90 leading-tight">A confirmation email has been sent.</p>
+                <h4 className="font-bold text-[15px] tracking-wide">
+                  {state.emailFailed ? "FAILED TO FILL" : "SUCCESS"}
+                </h4>
+                <p className={`text-[14px] mt-0.5 font-medium opacity-90 leading-tight ${
+                  state.emailFailed ? "text-red-50" : "text-purple-100"
+                }`}>
+                  {state.emailFailed 
+                    ? "Confirmation email failed. Entry rolled back." 
+                    : "A confirmation email has been sent."
+                  }
+                </p>
               </div>
               <button 
                 onClick={() => setShowToast(false)}
@@ -207,12 +226,19 @@ export default function ContactForm() {
 
               {/* Glassy Multicolored Loader with Glow */}
               <motion.div 
+                key={state.timestamp} 
                 initial={{ width: "0%" }}
                 animate={{ width: "100%" }}
                 transition={{ duration: 5, ease: "linear" }}
-                className="absolute bottom-0 left-0 h-1.5 bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-yellow-400 backdrop-blur-md"
+                className={`absolute bottom-0 left-0 h-1.5 backdrop-blur-md ${
+                  state.emailFailed 
+                    ? "bg-gradient-to-r from-orange-400 via-rose-400 to-red-400" 
+                    : "bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-yellow-400"
+                }`}
                 style={{ 
-                  boxShadow: "0 0 15px rgba(34, 211, 238, 0.4), 0 0 5px rgba(255, 255, 255, 0.8)",
+                  boxShadow: state.emailFailed 
+                    ? "0 0 15px rgba(244, 63, 94, 0.4), 0 0 5px rgba(255, 255, 255, 0.8)"
+                    : "0 0 15px rgba(34, 211, 238, 0.4), 0 0 5px rgba(255, 255, 255, 0.8)",
                   zIndex: 20
                 }}
               />

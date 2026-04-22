@@ -7,6 +7,7 @@ import freeEmailDomains from 'free-email-domains';
 // @ts-ignore
 import disposableDomains from 'disposable-email-domains';
 import { saveToExcel } from '@/lib/saveToExcel';
+import { removeFromExcel } from '@/lib/removeFromExcel';
 import { checkIfExists } from '@/lib/preventSpam';
 import { sendThankYouEmail } from '@/lib/sendEmail';
 
@@ -20,7 +21,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
   const phone = formData.get('phone') as string || '';
 
   if (!email || !email.includes('@')) {
-    return { valid: false, error: "A valid email is required.", successMessage: "", timestamp: Date.now() };
+    return { valid: false, error: "A valid email is required.", successMessage: "", emailFailed: false, timestamp: Date.now() };
   }
 
   const alreadyExists = await checkIfExists(email, phone);
@@ -29,6 +30,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
       valid: false, 
       error: "You have already submitted a request with this email or phone number.", 
       successMessage: "",
+      emailFailed: false,
       timestamp: Date.now()
     };
   }
@@ -48,6 +50,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
       valid: false, 
       error: "Please use a work email rather than public providers (like Gmail/Yahoo).", 
       successMessage: "",
+      emailFailed: false,
       timestamp: Date.now()
     };
   }
@@ -61,15 +64,27 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     ]) as any[];
 
     if (!mxRecords || mxRecords.length === 0) {
-      return { valid: false, error: "This domain cannot receive emails.", successMessage: "", timestamp: Date.now() };
+      return { valid: false, error: "This domain cannot receive emails.", successMessage: "", emailFailed: false, timestamp: Date.now() };
     }
 
     // Process form... (DB logic, Email sending, etc.)
-    await saveToExcel(email, formData);
+    const savedDate = await saveToExcel(email, formData);
     
     const emailSent = await sendThankYouEmail(email, firstName, baseUrl);
     console.log(`Email to ${email} sent status: ${emailSent} via ${baseUrl}`);
-    return { valid: true, error: "", successMessage: "Thank you! Your project request has been submitted successfully.", timestamp: Date.now() };
+    
+    if (!emailSent && savedDate) {
+      await removeFromExcel(email, savedDate);
+      return { 
+        valid: false, 
+        error: "Confirmation email failed to send. Your data has been removed for privacy. Please try again.", 
+        successMessage: "",
+        emailFailed: true,
+        timestamp: Date.now() 
+      };
+    }
+    
+    return { valid: true, error: "", successMessage: "Thank you! Your project request has been submitted successfully.", emailFailed: false, timestamp: Date.now() };
 
   } catch (e: any) {
     console.error(`DNS MX Lookup Error for ${domain}:`, e.code || e.message);
@@ -77,7 +92,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     // If the domain strictly does not exist (ENOTFOUND) 
     // or has no DNS records at all (ENODATA)
     if (e.code === 'ENOTFOUND' || e.code === 'ENODATA') {
-      return { valid: false, error: "The domain provided does not exist.", successMessage: "", timestamp: Date.now() };
+      return { valid: false, error: "The domain provided does not exist.", successMessage: "", emailFailed: false, timestamp: Date.now() };
     }
 
     /** * FAIL-SAFE: 
@@ -85,14 +100,27 @@ export async function validateContactForm(prevState: any, formData: FormData) {
      * we let the form pass. It's better to receive one spam email 
      * than to block a real client because a DNS server was slow.
      */
-    await saveToExcel(email, formData);
+    const savedDateFail = await saveToExcel(email, formData);
     
     const emailSentFailSafe = await sendThankYouEmail(email, firstName, baseUrl);
     console.log(`Email to ${email} (fail-safe) sent status: ${emailSentFailSafe} via ${baseUrl}`);
+    
+    if (!emailSentFailSafe && savedDateFail) {
+      await removeFromExcel(email, savedDateFail);
+      return { 
+        valid: false, 
+        error: "Confirmation email failed to send (DNS Timeout). Data removed for privacy. Please try again.", 
+        successMessage: "",
+        emailFailed: true,
+        timestamp: Date.now() 
+      };
+    }
+    
     return { 
       valid: true, 
       error: "", 
       successMessage: "Your project request has been submitted successfully. Thank You!",
+      emailFailed: false,
       timestamp: Date.now()
     };
   }
