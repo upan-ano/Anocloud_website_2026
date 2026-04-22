@@ -13,6 +13,7 @@
     "clsx": "^2.1.1",
     "disposable-email-domains": "^1.0.62",
     "exceljs": "^4.4.0",
+    "firebase": "^12.12.1",
     "framer-motion": "^12.38.0",
     "free-email-domains": "^1.2.25",
     "lucide-react": "^1.7.0",
