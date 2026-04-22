@@ -70,10 +70,20 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     // Process form... (DB logic, Email sending, etc.)
     const savedDate = await saveToExcel(email, formData);
     
+    if (!savedDate) {
+      return { 
+        valid: false, 
+        error: "Failed to process your request (Database Error). Please try again.", 
+        successMessage: "",
+        emailFailed: true,
+        timestamp: Date.now() 
+      };
+    }
+
     const emailSent = await sendThankYouEmail(email, firstName, baseUrl);
     console.log(`Email to ${email} sent status: ${emailSent} via ${baseUrl}`);
     
-    if (!emailSent && savedDate) {
+    if (!emailSent) {
       await removeFromExcel(email, savedDate);
       return { 
         valid: false, 
@@ -102,10 +112,20 @@ export async function validateContactForm(prevState: any, formData: FormData) {
      */
     const savedDateFail = await saveToExcel(email, formData);
     
+    if (!savedDateFail) {
+      return { 
+        valid: false, 
+        error: "Failed to process your request (Database Error). Please try again.", 
+        successMessage: "",
+        emailFailed: true,
+        timestamp: Date.now() 
+      };
+    }
+
     const emailSentFailSafe = await sendThankYouEmail(email, firstName, baseUrl);
     console.log(`Email to ${email} (fail-safe) sent status: ${emailSentFailSafe} via ${baseUrl}`);
     
-    if (!emailSentFailSafe && savedDateFail) {
+    if (!emailSentFailSafe) {
       await removeFromExcel(email, savedDateFail);
       return { 
         valid: false, 
