@@ -1,5 +1,6 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { Resolver } from 'node:dns/promises';
 // @ts-ignore
 import freeEmailDomains from 'free-email-domains';
@@ -7,6 +8,7 @@ import freeEmailDomains from 'free-email-domains';
 import disposableDomains from 'disposable-email-domains';
 import { saveToExcel } from '@/lib/saveToExcel';
 import { checkIfExists } from '@/lib/preventSpam';
+import { sendThankYouEmail } from '@/lib/sendEmail';
 
 // Instantiate the resolver outside the function to reuse it across requests
 const resolver = new Resolver();
@@ -18,7 +20,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
   const phone = formData.get('phone') as string || '';
 
   if (!email || !email.includes('@')) {
-    return { valid: false, error: "A valid email is required.", successMessage: "" };
+    return { valid: false, error: "A valid email is required.", successMessage: "", timestamp: Date.now() };
   }
 
   const alreadyExists = await checkIfExists(email, phone);
@@ -26,18 +28,27 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     return { 
       valid: false, 
       error: "You have already submitted a request with this email or phone number.", 
-      successMessage: "" 
+      successMessage: "",
+      timestamp: Date.now()
     };
   }
 
   const domain = email.split('@')[1].toLowerCase();
+  
+  // Dynamically determine the baseUrl from headers
+  const headersList = await headers();
+  const host = headersList.get('host');
+  const protocol = headersList.get('x-forwarded-proto') || 'https';
+  const baseUrl = `${protocol}://${host}`;
+  const firstName = formData.get('firstName') as string || '';
 
   // 1. Block standard free/spam domains (Local check)
   if (freeEmailDomains.includes(domain) || disposableDomains.includes(domain)) {
     return { 
       valid: false, 
       error: "Please use a work email rather than public providers (like Gmail/Yahoo).", 
-      successMessage: "" 
+      successMessage: "",
+      timestamp: Date.now()
     };
   }
 
@@ -50,12 +61,15 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     ]) as any[];
 
     if (!mxRecords || mxRecords.length === 0) {
-      return { valid: false, error: "This domain cannot receive emails.", successMessage: "" };
+      return { valid: false, error: "This domain cannot receive emails.", successMessage: "", timestamp: Date.now() };
     }
 
     // Process form... (DB logic, Email sending, etc.)
     await saveToExcel(email, formData);
-    return { valid: true, error: "", successMessage: "Thank you! Your project request has been submitted successfully." };
+    
+    const emailSent = await sendThankYouEmail(email, firstName, baseUrl);
+    console.log(`Email to ${email} sent status: ${emailSent} via ${baseUrl}`);
+    return { valid: true, error: "", successMessage: "Thank you! Your project request has been submitted successfully.", timestamp: Date.now() };
 
   } catch (e: any) {
     console.error(`DNS MX Lookup Error for ${domain}:`, e.code || e.message);
@@ -63,7 +77,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     // If the domain strictly does not exist (ENOTFOUND) 
     // or has no DNS records at all (ENODATA)
     if (e.code === 'ENOTFOUND' || e.code === 'ENODATA') {
-      return { valid: false, error: "The domain provided does not exist.", successMessage: "" };
+      return { valid: false, error: "The domain provided does not exist.", successMessage: "", timestamp: Date.now() };
     }
 
     /** * FAIL-SAFE: 
@@ -72,10 +86,14 @@ export async function validateContactForm(prevState: any, formData: FormData) {
      * than to block a real client because a DNS server was slow.
      */
     await saveToExcel(email, formData);
+    
+    const emailSentFailSafe = await sendThankYouEmail(email, firstName, baseUrl);
+    console.log(`Email to ${email} (fail-safe) sent status: ${emailSentFailSafe} via ${baseUrl}`);
     return { 
       valid: true, 
       error: "", 
-      successMessage: "Your project request has been submitted successfully. Thank You!" 
+      successMessage: "Your project request has been submitted successfully. Thank You!",
+      timestamp: Date.now()
     };
   }
 }
