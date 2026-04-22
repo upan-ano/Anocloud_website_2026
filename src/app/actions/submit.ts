@@ -6,9 +6,7 @@ import { Resolver } from 'node:dns/promises';
 import freeEmailDomains from 'free-email-domains';
 // @ts-ignore
 import disposableDomains from 'disposable-email-domains';
-import { saveToExcel } from '@/lib/saveToExcel';
-import { removeFromExcel } from '@/lib/removeFromExcel';
-import { checkIfExists } from '@/lib/preventSpam';
+import { saveToGoogleSheets, removeFromGoogleSheets, checkIfExistsInGoogleSheets } from '@/lib/googleSheets';
 import { sendThankYouEmail } from '@/lib/sendEmail';
 
 // Instantiate the resolver outside the function to reuse it across requests
@@ -24,7 +22,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     return { valid: false, error: "A valid email is required.", successMessage: "", emailFailed: false, timestamp: Date.now() };
   }
 
-  const alreadyExists = await checkIfExists(email, phone);
+  const alreadyExists = await checkIfExistsInGoogleSheets(email, phone);
   if (alreadyExists) {
     return { 
       valid: false, 
@@ -68,7 +66,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     }
 
     // Process form... (DB logic, Email sending, etc.)
-    const savedDate = await saveToExcel(email, formData);
+    const savedDate = await saveToGoogleSheets(email, formData);
     
     if (!savedDate) {
       return { 
@@ -84,7 +82,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     console.log(`Email to ${email} sent status: ${emailSent} via ${baseUrl}`);
     
     if (!emailSent) {
-      await removeFromExcel(email, savedDate);
+      await removeFromGoogleSheets(email, savedDate);
       return { 
         valid: false, 
         error: "Confirmation email failed to send. Your data has been removed for privacy. Please try again.", 
@@ -110,7 +108,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
      * we let the form pass. It's better to receive one spam email 
      * than to block a real client because a DNS server was slow.
      */
-    const savedDateFail = await saveToExcel(email, formData);
+    const savedDateFail = await saveToGoogleSheets(email, formData);
     
     if (!savedDateFail) {
       return { 
@@ -126,7 +124,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     console.log(`Email to ${email} (fail-safe) sent status: ${emailSentFailSafe} via ${baseUrl}`);
     
     if (!emailSentFailSafe) {
-      await removeFromExcel(email, savedDateFail);
+      await removeFromGoogleSheets(email, savedDateFail);
       return { 
         valid: false, 
         error: "Confirmation email failed to send (DNS Timeout). Data removed for privacy. Please try again.", 
