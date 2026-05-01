@@ -16,7 +16,7 @@ export type Blog = {
 };
 
 export const getBlogsDataFile = () => {
-  return path.join(process.cwd(), 'src/app/constants/blogs.json');
+  return path.join(process.cwd(), 'blogConstants/blogs.json');
 }
 
 export const getBlogs = (): Blog[] => {

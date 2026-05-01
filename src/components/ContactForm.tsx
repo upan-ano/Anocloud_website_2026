@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect, useState, useRef } from 'react';
 import { validateContactForm } from '@/app/actions/submit';
-import { CheckCircle, X, AlertCircle } from 'lucide-react';
+import { validateEmail } from '@/app/actions/validateEmail';
+import { CheckCircle, X, AlertCircle, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const initialState = {
@@ -16,6 +17,8 @@ const initialState = {
 export default function ContactForm() {
   const [state, formAction, isPending] = useActionState(validateContactForm, initialState);
   const [showToast, setShowToast] = useState(false);
+  const [emailError, setEmailError] = useState('');
+  const [isValidatingEmail, setIsValidatingEmail] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -23,11 +26,34 @@ export default function ContactForm() {
       setShowToast(true);
       if (state.valid && !state.emailFailed) {
         formRef.current?.reset();
+        setEmailError('');
       }
       const timer = setTimeout(() => setShowToast(false), 5000);
       return () => clearTimeout(timer);
     }
   }, [state?.successMessage, state?.emailFailed, state?.timestamp, state?.valid]);
+
+  const handleEmailBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+    const email = e.target.value;
+    if (!email) {
+      setEmailError('');
+      return;
+    }
+
+    setIsValidatingEmail(true);
+    try {
+      const result = await validateEmail(email);
+      if (!result.valid) {
+        setEmailError(result.error);
+      } else {
+        setEmailError('');
+      }
+    } catch (err) {
+      console.error("Email validation failed:", err);
+    } finally {
+      setIsValidatingEmail(false);
+    }
+  };
 
   return (
     <div className="w-full max-w-6xl mx-auto px-6 py-16">
@@ -69,16 +95,37 @@ export default function ContactForm() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
+              <div className="relative">
                 <label htmlFor="email" className="sr-only">Email</label>
-                <input
-                  type="email"
-                  name="email"
-                  id="email"
-                  placeholder="Email"
-                  className="w-full bg-[#fcfcfc] border border-gray-200 text-gray-900 text-sm rounded-xl focus:ring-[#005241] focus:border-[#005241] block p-4 font-medium placeholder-gray-500 transition-all hover:border-gray-300"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type="email"
+                    name="email"
+                    id="email"
+                    onBlur={handleEmailBlur}
+                    onChange={() => emailError && setEmailError('')}
+                    placeholder="Email"
+                    className={`w-full bg-[#fcfcfc] border text-gray-900 text-sm rounded-xl focus:ring-[#005241] focus:border-[#005241] block p-4 font-medium placeholder-gray-500 transition-all hover:border-gray-300 ${
+                      emailError ? 'border-red-500' : 'border-gray-200'
+                    }`}
+                    required
+                  />
+                  {isValidatingEmail && (
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    </div>
+                  )}
+                </div>
+                {emailError && (
+                  <motion.p 
+                    initial={{ opacity: 0, y: -5 }} 
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-red-500 text-xs mt-1.5 ml-1 font-semibold flex items-center gap-1"
+                  >
+                    <AlertCircle className="w-3 h-3" />
+                    {emailError}
+                  </motion.p>
+                )}
               </div>
               <div>
                 <label htmlFor="phone" className="sr-only">Phone number</label>
@@ -91,6 +138,7 @@ export default function ContactForm() {
                 />
               </div>
             </div>
+
 
             <fieldset className="space-y-4 rounded-3xl border border-gray-200 bg-[#fcfcfc] p-6">
               <legend className="sr-only">Service Selection</legend>

@@ -1,5 +1,5 @@
 import { MetadataRoute } from 'next';
-import { getBlogs } from '../../blogConstants/blogsData'; // Update path to match your actual file location
+import { getBlogs } from '../../../blogConstants/blogsData';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://anocloud.com';

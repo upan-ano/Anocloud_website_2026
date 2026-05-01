@@ -6,7 +6,7 @@ import { ArrowRight, Calendar, Clock, ChevronRight } from "lucide-react";
 import FluidGreenBackground from "@/components/FluidGreenBackground";
 import Image from "next/image";
 
-import blogsData from "../../../blogConstants/blogs.json";
+import blogsData from "../../../../blogConstants/blogs.json";
 
 export default function BlogPage() {
   const trendingArticle = blogsData[0];

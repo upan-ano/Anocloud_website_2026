@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import "./globals.css";
-import ClientLayoutShell from "@/components/ClientLayoutShell";
-import Footer from "@/components/Footer";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -26,19 +24,11 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${outfit.variable}`}>
       <body className="antialiased font-inter bg-slate-50 text-foreground transition-colors duration-500 selection:bg-primary selection:text-white">
-        <ClientLayoutShell />
-        <main className="pt-36">
-          {children}
-        </main>
-        <Footer />
+        {children}
       </body>
     </html>
   );

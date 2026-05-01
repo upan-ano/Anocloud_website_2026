@@ -5,7 +5,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import blogsData from '../../../../blogConstants/blogs.json';
+import blogsData from '../../../../../blogConstants/blogs.json';
 
 const getBlogs = () => blogsData;
 const getBlogBySlug = (slug: string) => blogsData.find((blog) => blog.slug === slug);

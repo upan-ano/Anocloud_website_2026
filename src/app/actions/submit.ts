@@ -2,35 +2,29 @@
 
 import { headers } from 'next/headers';
 import { Resolver } from 'node:dns/promises';
-// @ts-ignore
 import freeEmailDomains from 'free-email-domains';
-// @ts-ignore
 import disposableDomains from 'disposable-email-domains';
 import { saveToGoogleSheets, removeFromGoogleSheets, checkIfExistsInGoogleSheets } from '@/lib/googleSheets';
 import { sendThankYouEmail } from '@/lib/sendEmail';
+
+import { createErrorResponse, createSuccessResponse, type ActionResponse, ValidationErrors, SuccessMessages } from '@/lib/error-handler';
 
 // Instantiate the resolver outside the function to reuse it across requests
 const resolver = new Resolver();
 // Use reliable public DNS servers to avoid ETIMEOUT in serverless environments
 resolver.setServers(['1.1.1.1', '8.8.8.8']);
 
-export async function validateContactForm(prevState: any, formData: FormData) {
+export async function validateContactForm(prevState: unknown, formData: FormData): Promise<ActionResponse> {
   const email = formData.get('email') as string;
   const phone = formData.get('phone') as string || '';
 
   if (!email || !email.includes('@')) {
-    return { valid: false, error: "A valid email is required.", successMessage: "", emailFailed: false, timestamp: Date.now() };
+    return createErrorResponse(ValidationErrors.INVALID_EMAIL);
   }
 
   const alreadyExists = await checkIfExistsInGoogleSheets(email, phone);
   if (alreadyExists) {
-    return { 
-      valid: false, 
-      error: "You have already submitted a request with this email or phone number.", 
-      successMessage: "",
-      emailFailed: false,
-      timestamp: Date.now()
-    };
+    return createErrorResponse(ValidationErrors.ALREADY_SUBMITTED);
   }
 
   const domain = email.split('@')[1].toLowerCase();
@@ -44,13 +38,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
 
   // 1. Block standard free/spam domains (Local check)
   if (freeEmailDomains.includes(domain) || disposableDomains.includes(domain)) {
-    return { 
-      valid: false, 
-      error: "Please use a work email rather than public providers (like Gmail/Yahoo).", 
-      successMessage: "",
-      emailFailed: false,
-      timestamp: Date.now()
-    };
+    return createErrorResponse(ValidationErrors.PUBLIC_EMAIL_PROVIDER);
   }
 
   try {
@@ -59,23 +47,17 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     const mxRecords = await Promise.race([
       resolver.resolveMx(domain),
       new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 4000))
-    ]) as any[];
+    ]) as Array<{ priority: number; exchange: string }>;
 
     if (!mxRecords || mxRecords.length === 0) {
-      return { valid: false, error: "This domain cannot receive emails.", successMessage: "", emailFailed: false, timestamp: Date.now() };
+      return createErrorResponse(ValidationErrors.NO_MX_RECORDS);
     }
 
     // Process form... (DB logic, Email sending, etc.)
     const savedDate = await saveToGoogleSheets(email, formData);
     
     if (!savedDate) {
-      return { 
-        valid: false, 
-        error: "Failed to process your request (Database Error). Please try again.", 
-        successMessage: "",
-        emailFailed: true,
-        timestamp: Date.now() 
-      };
+      return createErrorResponse(ValidationErrors.DATABASE_ERROR, true);
     }
 
     const emailSent = await sendThankYouEmail(email, firstName, baseUrl);
@@ -83,24 +65,21 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     
     if (!emailSent) {
       await removeFromGoogleSheets(email, savedDate);
-      return { 
-        valid: false, 
-        error: "Confirmation email failed to send. Your data has been removed for privacy. Please try again.", 
-        successMessage: "",
-        emailFailed: true,
-        timestamp: Date.now() 
-      };
+      return createErrorResponse(ValidationErrors.EMAIL_SEND_FAILURE, true);
     }
     
-    return { valid: true, error: "", successMessage: "Thank you! Your project request has been submitted successfully.", emailFailed: false, timestamp: Date.now() };
+    return createSuccessResponse(SuccessMessages.SUBMISSION_SUCCESS);
 
-  } catch (e: any) {
-    console.error(`DNS MX Lookup Error for ${domain}:`, e.code || e.message);
+  } catch (e: unknown) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    const nodeError = e as NodeJS.ErrnoException | undefined;
+    const errorCode = nodeError?.code || (error as NodeJS.ErrnoException | undefined)?.code;
+    console.error(`DNS MX Lookup Error for ${domain}:`, errorCode || error.message);
 
     // If the domain strictly does not exist (ENOTFOUND) 
     // or has no DNS records at all (ENODATA)
-    if (e.code === 'ENOTFOUND' || e.code === 'ENODATA') {
-      return { valid: false, error: "The domain provided does not exist.", successMessage: "", emailFailed: false, timestamp: Date.now() };
+    if (errorCode === 'ENOTFOUND' || errorCode === 'ENODATA') {
+      return createErrorResponse(ValidationErrors.DOMAIN_NOT_FOUND);
     }
 
     /** * FAIL-SAFE: 
@@ -111,13 +90,7 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     const savedDateFail = await saveToGoogleSheets(email, formData);
     
     if (!savedDateFail) {
-      return { 
-        valid: false, 
-        error: "Failed to process your request (Database Error). Please try again.", 
-        successMessage: "",
-        emailFailed: true,
-        timestamp: Date.now() 
-      };
+      return createErrorResponse(ValidationErrors.DATABASE_ERROR, true);
     }
 
     const emailSentFailSafe = await sendThankYouEmail(email, firstName, baseUrl);
@@ -125,21 +98,9 @@ export async function validateContactForm(prevState: any, formData: FormData) {
     
     if (!emailSentFailSafe) {
       await removeFromGoogleSheets(email, savedDateFail);
-      return { 
-        valid: false, 
-        error: "Confirmation email failed to send (DNS Timeout). Data removed for privacy. Please try again.", 
-        successMessage: "",
-        emailFailed: true,
-        timestamp: Date.now() 
-      };
+      return createErrorResponse(ValidationErrors.EMAIL_SEND_FAILURE_DNS, true);
     }
     
-    return { 
-      valid: true, 
-      error: "", 
-      successMessage: "Your project request has been submitted successfully. Thank You!",
-      emailFailed: false,
-      timestamp: Date.now()
-    };
+    return createSuccessResponse(SuccessMessages.FAILSAFE_SUCCESS);
   }
 }
