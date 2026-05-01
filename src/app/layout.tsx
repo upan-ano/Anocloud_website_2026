@@ -26,8 +26,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${outfit.variable}`}>
-      <body className="antialiased font-inter bg-slate-50 text-foreground transition-colors duration-500 selection:bg-primary selection:text-white">
+    <html lang="en" className={`${inter.variable} ${outfit.variable}`} suppressHydrationWarning>
+      <body 
+        className="antialiased font-inter bg-slate-50 text-foreground transition-colors duration-500 selection:bg-primary selection:text-white"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

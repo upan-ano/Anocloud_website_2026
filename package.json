@@ -16,6 +16,7 @@
     "firebase": "^12.12.1",
     "framer-motion": "^12.38.0",
     "free-email-domains": "^1.2.25",
+    "jose": "^6.2.3",
     "lucide-react": "^1.7.0",
     "marked": "^17.0.6",
     "next": "16.2.2",

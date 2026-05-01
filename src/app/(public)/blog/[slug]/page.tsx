@@ -5,7 +5,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-import blogsData from '../../../../../blogConstants/blogs.json';
+import blogsData from '@/blogContent/metadata.json';
 
 const getBlogs = () => blogsData;
 const getBlogBySlug = (slug: string) => blogsData.find((blog) => blog.slug === slug);
@@ -54,8 +54,16 @@ export default async function BlogPage({ params }: Params) {
     );
   }
 
-  const filePath = path.join(process.cwd(), 'blogContent', `${resolvedParams.slug}.md`);
-  const fileContent = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf8') : '';
+  const mdPath = path.join(process.cwd(), 'src', 'blogContent', `${resolvedParams.slug}.md`);
+  const mdxPath = path.join(process.cwd(), 'src', 'blogContent', `${resolvedParams.slug}.mdx`);
+  
+  let fileContent = '';
+  if (fs.existsSync(mdxPath)) {
+    fileContent = fs.readFileSync(mdxPath, 'utf8');
+  } else if (fs.existsSync(mdPath)) {
+    fileContent = fs.readFileSync(mdPath, 'utf8');
+  }
+  
   const content = marked.parse(fileContent) as string;
 
   return (
