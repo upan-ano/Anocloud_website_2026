@@ -1,14 +1,8 @@
-import fs from 'fs';
-import path from 'path';
 import { marked } from 'marked';
 import { Metadata } from 'next';
 import Link from 'next/link';
-import { redirect } from 'next/navigation';
-
-import blogsData from '@/blogContent/metadata.json';
-
-const getBlogs = () => blogsData;
-const getBlogBySlug = (slug: string) => blogsData.find((blog) => blog.slug === slug);
+import { getPostBySlug, getPosts } from '@/actions/blog';
+import BlogRefreshHandler from '@/components/blog/BlogRefreshHandler';
 
 type Params = {
   params: Promise<{
@@ -16,20 +10,20 @@ type Params = {
   }>;
 };
 
-export function generateStaticParams() {
-  const blogs = getBlogs();
+export async function generateStaticParams() {
+  const blogs = await getPosts();
   return blogs.map((blog) => ({ slug: blog.slug }));
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const resolvedParams = await params;
-  const blog = getBlogBySlug(resolvedParams.slug);
+  const blog = await getPostBySlug(resolvedParams.slug);
   if (!blog) return {};
   return {
     title: blog.title,
     description: blog.excerpt,
     alternates: {
-      canonical: `https://upasana-s-expedition.vercel.app/blog/${resolvedParams.slug}`,
+      canonical: `https://anocloud.com/blog/${resolvedParams.slug}`,
     },
     openGraph: {
       title: blog.title,
@@ -41,7 +35,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function BlogPage({ params }: Params) {
   const resolvedParams = await params;
-  const blog = getBlogBySlug(resolvedParams.slug);
+  const blog = await getPostBySlug(resolvedParams.slug);
 
   if (!blog) {
     return (
@@ -54,20 +48,11 @@ export default async function BlogPage({ params }: Params) {
     );
   }
 
-  const mdPath = path.join(process.cwd(), 'src', 'blogContent', `${resolvedParams.slug}.md`);
-  const mdxPath = path.join(process.cwd(), 'src', 'blogContent', `${resolvedParams.slug}.mdx`);
-  
-  let fileContent = '';
-  if (fs.existsSync(mdxPath)) {
-    fileContent = fs.readFileSync(mdxPath, 'utf8');
-  } else if (fs.existsSync(mdPath)) {
-    fileContent = fs.readFileSync(mdPath, 'utf8');
-  }
-  
-  const content = marked.parse(fileContent) as string;
+  const content = await marked.parse(blog.content || "") as string;
 
   return (
     <div className="min-h-screen bg-[#f6f5f1]">
+      <BlogRefreshHandler />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,900;1,700&family=Instrument+Sans:wght@400;500;600;700;800&display=swap');
         .font-display { font-family: 'Fraunces', Georgia, serif; }
@@ -94,7 +79,7 @@ export default async function BlogPage({ params }: Params) {
         .prose-article td { padding: 0.6rem 0.9rem; border: 1px solid #e5e7eb; color: #374151; }
         .prose-article tr:nth-child(even) td { background: #f9fafb; }
       `}</style>
-
+ 
       {/* Sticky top nav */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-gray-200 font-body">
         <div className="max-w-5xl mx-auto px-6 py-3 flex items-center justify-between">
@@ -110,9 +95,9 @@ export default async function BlogPage({ params }: Params) {
           </div>
         </div>
       </nav>
-
+ 
       <article className="max-w-3xl mx-auto px-6 py-12 font-body">
-
+ 
         {/* Category & tags */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
           {blog.category && (
@@ -126,17 +111,17 @@ export default async function BlogPage({ params }: Params) {
             </span>
           ))}
         </div>
-
+ 
         {/* Title */}
         <h1 className="font-display font-black text-4xl md:text-[2.85rem] text-gray-900 leading-[1.1] tracking-tight mb-6">
           {blog.title}
         </h1>
-
+ 
         {/* Excerpt */}
         <p className="text-lg text-gray-500 leading-relaxed mb-8 border-l-4 border-[#56c48f] pl-5 italic">
           {blog.excerpt}
         </p>
-
+ 
         {/* Author + meta row */}
         <div className="flex items-center gap-4 py-4 border-y border-gray-200 mb-10">
           <div className="w-10 h-10 rounded-full bg-[#005241] flex items-center justify-center text-white font-black text-sm flex-shrink-0">
@@ -157,15 +142,17 @@ export default async function BlogPage({ params }: Params) {
             </span>
           </div>
         </div>
-
+ 
         {/* Cover image */}
-        <div className="relative w-full rounded-2xl overflow-hidden mb-12 shadow-xl" style={{ aspectRatio: '16/9' }}>
-          <img src={blog.image} alt={blog.title} className="w-full h-full object-cover" />
-        </div>
-
+        {blog.image && (
+          <div className="relative w-full rounded-2xl overflow-hidden mb-12 shadow-xl" style={{ aspectRatio: '16/9' }}>
+            <img src={blog.image} alt={blog.title} className="w-full h-full object-cover" />
+          </div>
+        )}
+ 
         {/* Article content */}
         <div className="prose-article" dangerouslySetInnerHTML={{ __html: content }} />
-
+ 
         {/* Footer */}
         <div className="mt-16 pt-8 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
           <Link

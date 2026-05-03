@@ -4,6 +4,7 @@ import React, { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { savePost, BlogPost } from "@/actions/blog";
 import { cn } from "@/lib/utils";
+import Toast from "@/components/ui/Toast";
 import { 
   Save, 
   Eye, 
@@ -83,14 +84,33 @@ export default function BlogForm({ initialData }: BlogFormProps) {
     return keywords.some(k => firstPara.toLowerCase().includes(k));
   }
 
+  const [toast, setToast] = useState<{ isVisible: boolean; message: string; type: "success" | "error" }>({
+    isVisible: false,
+    message: "",
+    type: "success"
+  });
+
   const handleSave = async () => {
     startTransition(async () => {
       const result = await savePost(formData, formData.content || "");
       if (result.success) {
-        router.push("/dashboard/insights");
-        router.refresh();
+        setToast({ 
+          isVisible: true, 
+          message: initialData ? "Insight updated successfully!" : "Insight published successfully!", 
+          type: "success" 
+        });
+        
+        // Wait a bit for the user to see the success message before redirecting
+        setTimeout(() => {
+          router.push("/dashboard/insights");
+          router.refresh();
+        }, 1500);
       } else {
-        alert("Error saving post: " + result.error);
+        setToast({ 
+          isVisible: true, 
+          message: "Failed to save: " + result.error, 
+          type: "error" 
+        });
       }
     });
   };
@@ -333,6 +353,13 @@ export default function BlogForm({ initialData }: BlogFormProps) {
           </div>
         </div>
       </div>
+      
+      <Toast 
+        isVisible={toast.isVisible}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast(prev => ({ ...prev, isVisible: false }))}
+      />
     </div>
   );
 }

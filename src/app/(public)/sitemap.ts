@@ -1,9 +1,9 @@
 import { MetadataRoute } from 'next';
-import { getBlogs } from '../../../blogConstants/blogsData';
+import { getPosts } from '@/actions/blog';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://anocloud.com';
-  const blogs = getBlogs();
+  const blogs = await getPosts();
 
   const blogUrls: MetadataRoute.Sitemap = blogs.map((blog) => ({
     url: `${baseUrl}/blog/${blog.slug}`,

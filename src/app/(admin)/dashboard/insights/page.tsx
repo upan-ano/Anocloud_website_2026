@@ -1,8 +1,9 @@
 import React from "react";
 import Link from "next/link";
 import { getPosts } from "@/actions/blog";
-import { Plus, Search, Filter, Edit3, Trash2, Eye, ExternalLink } from "lucide-react";
+import { Plus, Search, Filter, Edit3, Eye, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import DeletePostButton from "@/components/admin/DeletePostButton";
 
 export default async function InsightsLibraryPage() {
   const posts = await getPosts();
@@ -94,12 +95,7 @@ export default async function InsightsLibraryPage() {
                     >
                       <Edit3 className="h-4 w-4" />
                     </Link>
-                    <button 
-                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-400 transition-colors hover:border-rose-300 hover:text-rose-500"
-                      title="Delete Post"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                    <DeletePostButton slug={post.slug} />
                   </div>
                 </td>
               </tr>

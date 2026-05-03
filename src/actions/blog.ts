@@ -1,13 +1,8 @@
 "use server";
 
-import fs from "fs/promises";
-import path from "path";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
-// We'll use the root directory as the source of truth for now, 
-// matching the existing structure until we decide to migrate to src/blogContent.
-const BLOG_CONTENT_DIR = path.join(process.cwd(), "src", "blogContent");
-const BLOGS_JSON_PATH = path.join(process.cwd(), "src", "blogContent", "metadata.json");
+const BLOG_API_URL = process.env.BLOG_CONTENT_APP_SCRIPT_URL;
 
 export interface BlogPost {
   id: number;
@@ -25,40 +20,57 @@ export interface BlogPost {
 }
 
 /**
- * Fetch all blog posts metadata from blogs.json
+ * Fetch all blog posts metadata from Google Drive via Apps Script
  */
 export async function getPosts(): Promise<BlogPost[]> {
+  if (!BLOG_API_URL) {
+    console.error("BLOG_CONTENT_APP_SCRIPT_URL is not defined");
+    return [];
+  }
+
   try {
-    const data = await fs.readFile(BLOGS_JSON_PATH, "utf-8");
-    return JSON.parse(data);
+    const response = await fetch(`${BLOG_API_URL}?action=getMetadata`, {
+      next: { revalidate: 3600, tags: ["blogs"] } // Cache for 1 hour
+    });
+    
+    if (!response.ok) throw new Error("Failed to fetch metadata");
+    
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
   } catch (error) {
-    console.error("Error reading blogs.json:", error);
+    console.error("Error fetching blogs from Google Drive:", error);
     return [];
   }
 }
 
 /**
- * Get a single blog post by its slug, including content from the markdown file
+ * Get a single blog post by its slug, including content from Google Drive
  */
 export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
+  if (!BLOG_API_URL) return null;
+
   try {
+    // 1. Get Metadata (cached)
     const posts = await getPosts();
     const metadata = posts.find((p) => p.slug === slug);
     if (!metadata) return null;
 
-    // Try both .md and .mdx
-    let content = "";
-    const mdPath = path.join(BLOG_CONTENT_DIR, `${slug}.md`);
-    const mdxPath = path.join(BLOG_CONTENT_DIR, `${slug}.mdx`);
+    // 2. Get Content (cached)
+    const contentResponse = await fetch(`${BLOG_API_URL}?action=getContent&slug=${slug}`, {
+      next: { revalidate: 3600, tags: [`blog-${slug}`] }
+    });
 
-    try {
-      if (await fs.stat(mdxPath).catch(() => null)) {
-        content = await fs.readFile(mdxPath, "utf-8");
-      } else if (await fs.stat(mdPath).catch(() => null)) {
-        content = await fs.readFile(mdPath, "utf-8");
-      }
-    } catch (e) {
-      console.warn(`Content file not found for slug: ${slug}`);
+    if (!contentResponse.ok) {
+      console.warn(`Content not found for slug: ${slug}`);
+      return { ...metadata, content: "" };
+    }
+
+    const content = await contentResponse.text();
+    
+    // Check if GAS returned an error JSON instead of MDX content
+    if (content.trim().startsWith('{"error":')) {
+       console.error("GAS returned content error:", content);
+       return { ...metadata, content: "" };
     }
 
     return { ...metadata, content };
@@ -69,133 +81,114 @@ export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
 }
 
 /**
- * Save or update a blog post
+ * Save or update a blog post in Google Drive
  */
 export async function savePost(post: BlogPost, content: string) {
+  if (!BLOG_API_URL) return { success: false, error: "API URL missing" };
+
   try {
-    const posts = await getPosts();
-    const index = posts.findIndex((p) => p.slug === post.slug || p.id === post.id);
+    const response = await fetch(BLOG_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "savePost",
+        post,
+        content
+      }),
+    });
 
-    if (index !== -1) {
-      // Update existing
-      posts[index] = { ...posts[index], ...post };
-    } else {
-      // Create new
-      posts.push(post);
+    if (!response.ok) throw new Error("Failed to connect to Google Drive API");
+
+    const result = await response.json();
+    if (result.success) {
+      // Purge cache
+      revalidateTag("blogs", "max");
+      revalidateTag(`blog-${post.slug}`, "max");
+      
+      // Revalidate paths
+      revalidatePath("/blog", "page");
+      revalidatePath(`/blog/${post.slug}`, "page");
+      revalidatePath("/dashboard", "page");
+      revalidatePath("/dashboard/insights", "page");
+      revalidatePath(`/dashboard/insights/${post.slug}`, "page");
+      revalidatePath("/", "layout");
+      
+      return { success: true };
     }
-
-    // Save metadata
-    await fs.writeFile(BLOGS_JSON_PATH, JSON.stringify(posts, null, 2), "utf-8");
-
-    // Save content as .mdx as requested in the prompt
-    const contentPath = path.join(BLOG_CONTENT_DIR, `${post.slug}.mdx`);
-    await fs.writeFile(contentPath, content, "utf-8");
-
-    // Clear the old .md if it exists and we're now using .mdx
-    const oldMdPath = path.join(BLOG_CONTENT_DIR, `${post.slug}.md`);
-    if (contentPath !== oldMdPath) {
-      await fs.unlink(oldMdPath).catch(() => {});
-    }
-
-    revalidatePath("/blog");
-    revalidatePath(`/blog/${post.slug}`);
-    revalidatePath("/(admin)/dashboard/insights");
-
-    return { success: true };
+    return { success: false, error: result.error || "Failed to save" };
   } catch (error) {
-    console.error("Error saving post:", error);
+    console.error("Error saving post to Google Drive:", error);
     return { success: false, error: (error as Error).message };
   }
 }
 
 /**
- * Delete a blog post
+ * Delete a blog post from Google Drive
  */
 export async function deletePost(slug: string) {
+  if (!BLOG_API_URL) return { success: false, error: "API URL missing" };
+
   try {
-    const posts = await getPosts();
-    const updatedPosts = posts.filter((p) => p.slug !== slug);
+    const response = await fetch(BLOG_API_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        action: "deletePost",
+        slug
+      }),
+    });
 
-    if (posts.length === updatedPosts.length) {
-      return { success: false, error: "Post not found" };
+    if (!response.ok) throw new Error("Failed to connect to Google Drive API");
+
+    const result = await response.json();
+    if (result.success) {
+      // Purge cache
+      revalidateTag("blogs", "max");
+      
+      // Revalidate paths
+      revalidatePath("/blog", "page");
+      revalidatePath("/dashboard", "page");
+      revalidatePath("/dashboard/insights", "page");
+      revalidatePath("/", "layout");
+      
+      return { success: true };
     }
-
-    // Save metadata
-    await fs.writeFile(BLOGS_JSON_PATH, JSON.stringify(updatedPosts, null, 2), "utf-8");
-
-    // Delete content file (both .md and .mdx)
-    await fs.unlink(path.join(BLOG_CONTENT_DIR, `${slug}.mdx`)).catch(() => {});
-    await fs.unlink(path.join(BLOG_CONTENT_DIR, `${slug}.md`)).catch(() => {});
-
-    revalidatePath("/blog");
-    revalidatePath("/(admin)/dashboard/insights");
-
-    return { success: true };
+    return { success: false, error: result.error || "Failed to delete" };
   } catch (error) {
-    console.error("Error deleting post:", error);
+    console.error("Error deleting post from Google Drive:", error);
     return { success: false, error: (error as Error).message };
   }
 }
 
 /**
- * Get recent activity (last 5 modifications)
- * For now, this is a placeholder that returns the last 5 posts in the JSON
+ * Dashboard Stats and Activity
  */
 export async function getRecentActivity() {
   const posts = await getPosts();
   return posts.slice(-5).reverse();
 }
 
-/**
- * Get dashboard stats
- */
 export async function getDashboardStats() {
   const posts = await getPosts();
   return {
     totalPosts: posts.length,
     aeoScore: 84, // Placeholder
-    contentVelocity: 1.2, // Placeholder (posts per week/month)
+    contentVelocity: (posts.length / 4).toFixed(1), // Rough estimate
   };
 }
 
 /**
- * Get all images from public/assets/blog
+ * Image Management
+ * Extracts unique image URLs from processed blog posts.
  */
 export async function getImages() {
-  const assetsDir = path.join(process.cwd(), "public", "assets", "blog");
-  try {
-    await fs.mkdir(assetsDir, { recursive: true });
-    const files = await fs.readdir(assetsDir);
-    return files
-      .filter(file => /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(file))
-      .map(file => ({
-        name: file,
-        url: `/assets/blog/${file}`
-      }));
-  } catch (error) {
-    console.error("Error reading images:", error);
-    return [];
-  }
+  const posts = await getPosts();
+  const uniqueUrls = Array.from(new Set(posts.map(p => p.image).filter(Boolean)));
+  
+  return uniqueUrls.map(url => ({
+    name: url.split('/').pop() || "Insight Image",
+    url: url
+  }));
 }
 
-/**
- * Upload Image Action
- */
 export async function uploadImage(formData: FormData) {
-  try {
-    const file = formData.get("file") as File;
-    if (!file) return { success: false, error: "No file provided" };
-
-    const assetsDir = path.join(process.cwd(), "public", "assets", "blog");
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const filePath = path.join(assetsDir, file.name);
-
-    await fs.mkdir(assetsDir, { recursive: true });
-    await fs.writeFile(filePath, buffer);
-    
-    revalidatePath("/(admin)/dashboard/media");
-    return { success: true, url: `/assets/blog/${file.name}` };
-  } catch (error) {
-    return { success: false, error: (error as Error).message };
-  }
+  return { success: false, error: "External image links only. Please provide the URL in the Insight editor." };
 }
